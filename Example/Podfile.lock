@@ -1,0 +1,16 @@
+PODS:
+  - ThreadBacktrace (0.1.0)
+
+DEPENDENCIES:
+  - ThreadBacktrace (from `../`)
+
+EXTERNAL SOURCES:
+  ThreadBacktrace:
+    :path: "../"
+
+SPEC CHECKSUMS:
+  ThreadBacktrace: 86f65588a7da6fb0d44a6deb77f89eebdb1066dd
+
+PODFILE CHECKSUM: 379a9b3a20259ff347e654a7ab2d435a0524b408
+
+COCOAPODS: 1.6.2
