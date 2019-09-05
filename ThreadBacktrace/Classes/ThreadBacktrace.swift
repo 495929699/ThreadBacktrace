@@ -48,7 +48,7 @@ public struct BacktraceFrame: CustomDebugStringConvertible {
 
 extension Array where Element == BacktraceFrame {
     /// 打印调用栈
-    func log() {
+    public func log() {
         for value in self {
             print(" \(value)")
         }

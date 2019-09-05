@@ -8,7 +8,7 @@
 
 Pod::Spec.new do |s|
   s.name             = 'ThreadBacktrace'
-  s.version          = '0.1.0'
+  s.version          = '0.1.1'
   s.summary          = '获取线程调用栈'
 
   s.description      = <<-DESC
