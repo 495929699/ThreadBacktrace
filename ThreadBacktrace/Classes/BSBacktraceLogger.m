@@ -75,16 +75,11 @@ typedef struct BSStackFrameEntry{
     const uintptr_t return_address;
 } BSStackFrameEntry;
 
-static mach_port_t main_thread_id;
+NSArray<NSDictionary*>* _bs_backtraceOfThread(thread_t thread, NSError **error);
+thread_t bs_machThreadFromNSThread(NSThread *nsthread);
 
-@implementation BSBacktraceLogger
-
-+ (void)load {
-    main_thread_id = mach_thread_self();
-}
-
-#pragma -mark Implementation of interface
-+ (NSArray<NSDictionary *> *)bs_backtraceOfNSThread:(NSThread *)thread {
+#pragma -mark 对外公共接口
+NSArray<NSDictionary*>* bs_backtraceOfNSThread(NSThread *thread) {
     NSError *error;
     NSArray<NSDictionary *> *result =
     _bs_backtraceOfThread(bs_machThreadFromNSThread(thread), &error);
@@ -92,22 +87,15 @@ static mach_port_t main_thread_id;
     return result;
 }
 
-+ (nonnull NSArray<NSArray<NSDictionary *> *> *)bs_backtraceOfAllThread {
-    thread_act_array_t threads;
-    mach_msg_type_number_t thread_count = 0;
-    const task_t this_task = mach_task_self();
-    kern_return_t kr = task_threads(this_task, &threads, &thread_count);
-    
-    NSMutableArray *result = [NSMutableArray array];
-    if(kr != KERN_SUCCESS) {
-        return result;
-    }
-    
-    for(int i = 0; i < thread_count; i++) {
-        NSArray *array = _bs_backtraceOfThread(threads[i], nil);
-        [result addObject:array];
-    }
-    return [result copy];
+#pragma -mark 私有内部类
+static mach_port_t main_thread_id;
+
+@interface BSBacktraceLogger : NSObject
+@end
+@implementation BSBacktraceLogger
+
++ (void)load {
+    main_thread_id = mach_thread_self();
 }
 
 #pragma -mark Get call backtrace of a mach_thread
@@ -225,9 +213,10 @@ NSDictionary* bs_backtraceEntry(const int entryNum,
 
     return @{
              BacktraceImageName : [NSString stringWithFormat:@"%s", fname],
-             BacktraceAddress : [NSString stringWithFormat:@"0x%08" PRIxPTR, (uintptr_t)address],
+             BacktraceAddress : [NSNumber numberWithUnsignedInteger:address],
+//             BacktraceAddress : [NSString stringWithFormat:@"0x%08" PRIxPTR, (uintptr_t)address],
              BacktraceFuncName : [NSString stringWithFormat:@"%s", sname],
-             BacktraceOffset : [NSString stringWithFormat:@"%lu", offset]
+             BacktraceOffset : [NSNumber numberWithUnsignedInteger:offset]
          };
 }
 

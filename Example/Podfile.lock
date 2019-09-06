@@ -1,5 +1,5 @@
 PODS:
-  - ThreadBacktrace (0.1.0)
+  - ThreadBacktrace (0.1.1)
 
 DEPENDENCIES:
   - ThreadBacktrace (from `../`)
@@ -9,7 +9,7 @@ EXTERNAL SOURCES:
     :path: "../"
 
 SPEC CHECKSUMS:
-  ThreadBacktrace: 86f65588a7da6fb0d44a6deb77f89eebdb1066dd
+  ThreadBacktrace: 36f61dd6ef258992dcc77569dbbac6828c8e91e9
 
 PODFILE CHECKSUM: 379a9b3a20259ff347e654a7ab2d435a0524b408
 
