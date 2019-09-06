@@ -74,10 +74,11 @@ public struct BacktraceFrame: CustomDebugStringConvertible {
 extension Array where Element == BacktraceFrame {
     /// 打印调用栈
     public func log() {
-        print("线程调用堆栈：\n")
+        print("------------------------------------------------------")
         for (i, value) in self.enumerated() {
-            print(" \(i) \(value)")
+            print(String(format:"%-4ld %@", i,value.debugDescription))
         }
+        print("------------------------------------------------------")
     }
 }
 
