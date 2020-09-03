@@ -8,7 +8,7 @@
 
 Pod::Spec.new do |s|
   s.name             = 'ThreadBacktrace'
-  s.version          = '0.1.2'
+  s.version          = '0.1.3'
   s.summary          = '获取线程调用栈'
 
   s.description      = <<-DESC
@@ -17,11 +17,11 @@ TODO: Add long description of the pod here.
 
   s.homepage         = 'https://github.com/Boy-Rong/ThreadBacktrace'
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
-  s.author           = { 'rongheng' => '495929699g@gmail.com' }
+  s.author           = { 'rongheng' => 'rongheng.rh@gmail.com' }
   s.source           = { :git => 'https://github.com/Boy-Rong/ThreadBacktrace.git', :tag => s.version.to_s }
 
   s.ios.deployment_target = '8.0'
 
   s.source_files = 'ThreadBacktrace/Classes/*.{h,m,swift}'
-  
+  s
 end
