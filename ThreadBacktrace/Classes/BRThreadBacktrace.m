@@ -1,12 +1,6 @@
-//
-//  BSBacktraceLogger.m
-//  BSBacktraceLogger
-//
-//  Created by 张星宇 on 16/8/27.
-//  Copyright © 2016年 bestswifter. All rights reserved.
-//
 
-#import "BSBacktraceLogger.h"
+
+#import "BRThreadBacktrace.h"
 #import <mach/mach.h>
 #include <dlfcn.h>
 #include <pthread.h>
@@ -19,103 +13,105 @@
 #pragma -mark DEFINE MACRO FOR DIFFERENT CPU ARCHITECTURE
 #if defined(__arm64__)
 #define DETAG_INSTRUCTION_ADDRESS(A) ((A) & ~(3UL))
-#define BS_THREAD_STATE_COUNT ARM_THREAD_STATE64_COUNT
-#define BS_THREAD_STATE ARM_THREAD_STATE64
-#define BS_FRAME_POINTER __fp
-#define BS_STACK_POINTER __sp
-#define BS_INSTRUCTION_ADDRESS __pc
+#define BR_THREAD_STATE_COUNT ARM_THREAD_STATE64_COUNT
+#define BR_THREAD_STATE ARM_THREAD_STATE64
+#define BR_FRAME_POINTER __fp
+#define BR_STACK_POINTER __sp
+#define BR_INSTRUCTION_ADDRESS __pc
 
 #elif defined(__arm__)
 #define DETAG_INSTRUCTION_ADDRESS(A) ((A) & ~(1UL))
-#define BS_THREAD_STATE_COUNT ARM_THREAD_STATE_COUNT
-#define BS_THREAD_STATE ARM_THREAD_STATE
-#define BS_FRAME_POINTER __r[7]
-#define BS_STACK_POINTER __sp
-#define BS_INSTRUCTION_ADDRESS __pc
+#define BR_THREAD_STATE_COUNT ARM_THREAD_STATE_COUNT
+#define BR_THREAD_STATE ARM_THREAD_STATE
+#define BR_FRAME_POINTER __r[7]
+#define BR_STACK_POINTER __sp
+#define BR_INSTRUCTION_ADDRESS __pc
 
 #elif defined(__x86_64__)
 #define DETAG_INSTRUCTION_ADDRESS(A) (A)
-#define BS_THREAD_STATE_COUNT x86_THREAD_STATE64_COUNT
-#define BS_THREAD_STATE x86_THREAD_STATE64
-#define BS_FRAME_POINTER __rbp
-#define BS_STACK_POINTER __rsp
-#define BS_INSTRUCTION_ADDRESS __rip
+#define BR_THREAD_STATE_COUNT x86_THREAD_STATE64_COUNT
+#define BR_THREAD_STATE x86_THREAD_STATE64
+#define BR_FRAME_POINTER __rbp
+#define BR_STACK_POINTER __rsp
+#define BR_INSTRUCTION_ADDRESS __rip
 
 #elif defined(__i386__)
 #define DETAG_INSTRUCTION_ADDRESS(A) (A)
-#define BS_THREAD_STATE_COUNT x86_THREAD_STATE32_COUNT
-#define BS_THREAD_STATE x86_THREAD_STATE32
-#define BS_FRAME_POINTER __ebp
-#define BS_STACK_POINTER __esp
-#define BS_INSTRUCTION_ADDRESS __eip
+#define BR_THREAD_STATE_COUNT x86_THREAD_STATE32_COUNT
+#define BR_THREAD_STATE x86_THREAD_STATE32
+#define BR_FRAME_POINTER __ebp
+#define BR_STACK_POINTER __esp
+#define BR_INSTRUCTION_ADDRESS __eip
 
 #endif
 
 #define CALL_INSTRUCTION_FROM_RETURN_ADDRESS(A) (DETAG_INSTRUCTION_ADDRESS((A)) - 1)
 
 #if defined(__LP64__)
-#define TRACE_FMT         "%-4d%-31s 0x%016lx %s + %lu"
-#define POINTER_FMT       "0x%016lx"
-#define POINTER_SHORT_FMT "0x%lx"
-#define BS_NLIST struct nlist_64
+char *const TRACE_FMT            = "%-4d%-31s 0x%016lx %s + %lu";
+char *const POINTER_FMT         = "0x%016lx";
+char *const POINTER_SHORT_FMT   = "0x%lx";
+typedef struct nlist_64 nlist_t;
 #else
-#define TRACE_FMT         "%-4d%-31s 0x%08lx %s + %lu"
-#define POINTER_FMT       "0x%08lx"
-#define POINTER_SHORT_FMT "0x%lx"
-#define BS_NLIST struct nlist
+char *const TRACE_FMT           = "%-4d%-31s 0x%08lx %s + %lu";
+char *const POINTER_FMT         = "0x%08lx";
+char *const POINTER_SHORT_FMT   = "0x%lx";
+typedef struct nlist nlist_t;
 #endif
 
-NSString *const BacktraceImageName = @"BacktraceImageName";
-NSString *const BacktraceAddress = @"BacktraceAddress";
-NSString *const BacktraceFuncName = @"BacktraceFuncName";
-NSString *const BacktraceOffset = @"BacktraceOffset";
+NSString *const BRBacktraceImageName = @"BRBacktraceImageName";
+NSString *const BRBacktraceAddress = @"BRBacktraceAddress";
+NSString *const BRBacktraceFuncName = @"BRBacktraceFuncName";
+NSString *const BRBacktraceOffset = @"BRBacktraceOffset";
 
-typedef struct BSStackFrameEntry{
-    const struct BSStackFrameEntry *const previous;
+typedef struct BRStackFrameEntry{
+    const struct BRStackFrameEntry *const previous;
     const uintptr_t return_address;
-} BSStackFrameEntry;
+} BRStackFrameEntry;
 
-NSArray<NSDictionary*>* _bs_backtraceOfThread(thread_t thread, NSError **error);
-thread_t bs_machThreadFromNSThread(NSThread *nsthread);
+NSArray<NSDictionary*>* _br_backtraceOfThread(thread_t thread, NSError **error);
+thread_t br_machThreadFromNSThread(NSThread *nsthread);
 
 #pragma -mark 对外公共接口
-NSArray<NSDictionary*>* bs_backtraceOfNSThread(NSThread *thread) {
+NSArray<NSDictionary*>* br_backtraceOfNSThread(NSThread *thread) {
     NSError *error;
     NSArray<NSDictionary *> *result =
-    _bs_backtraceOfThread(bs_machThreadFromNSThread(thread), &error);
+    _br_backtraceOfThread(br_machThreadFromNSThread(thread), &error);
     if (error != nil) { NSLog(@"%@", error); }
     return result;
 }
 
 #pragma -mark 私有内部类
+/// 主线程
 static mach_port_t main_thread_id;
 
-@interface BSBacktraceLogger : NSObject
+@interface BRThreadBacktrace : NSObject
 @end
-@implementation BSBacktraceLogger
+
+@implementation BRThreadBacktrace
 
 + (void)load {
     main_thread_id = mach_thread_self();
 }
 
 #pragma -mark Get call backtrace of a mach_thread
-NSArray<NSDictionary *>* _bs_backtraceOfThread(thread_t thread, NSError **error) {
+NSArray<NSDictionary *>* _br_backtraceOfThread(thread_t thread, NSError **error) {
     uintptr_t backtraceBuffer[50];
     int i = 0;
     NSMutableArray <NSDictionary *>* backtraces = [NSMutableArray array];
     
     _STRUCT_MCONTEXT machineContext;
-    if(!bs_fillThreadStateIntoMachineContext(thread, &machineContext)) {
+    if(!br_fillThreadStateIntoMachineContext(thread, &machineContext)) {
         NSErrorDomain domain = [NSString stringWithFormat:@"Fail to get information about thread: %u", thread];
         *error = [NSError errorWithDomain:domain code:0 userInfo:nil];
         return backtraces;
     }
     
-    const uintptr_t instructionAddress = bs_mach_instructionAddress(&machineContext);
+    const uintptr_t instructionAddress = br_mach_instructionAddress(&machineContext);
     backtraceBuffer[i] = instructionAddress;
     ++i;
     
-    uintptr_t linkRegister = bs_mach_linkRegister(&machineContext);
+    uintptr_t linkRegister = br_mach_linkRegister(&machineContext);
     if (linkRegister) {
         backtraceBuffer[i] = linkRegister;
         i++;
@@ -126,10 +122,10 @@ NSArray<NSDictionary *>* _bs_backtraceOfThread(thread_t thread, NSError **error)
         return backtraces;
     }
     
-    BSStackFrameEntry frame = {0};
-    const uintptr_t framePtr = bs_mach_framePointer(&machineContext);
+    BRStackFrameEntry frame = {0};
+    const uintptr_t framePtr = br_mach_framePointer(&machineContext);
     if(framePtr == 0 ||
-       bs_mach_copyMem((void *)framePtr, &frame, sizeof(frame)) != KERN_SUCCESS) {
+       br_mach_copyMem((void *)framePtr, &frame, sizeof(frame)) != KERN_SUCCESS) {
         *error = [NSError errorWithDomain:@"Fail to get frame pointer" code:0 userInfo:nil];
         return backtraces;
     }
@@ -138,16 +134,16 @@ NSArray<NSDictionary *>* _bs_backtraceOfThread(thread_t thread, NSError **error)
         backtraceBuffer[i] = frame.return_address;
         if(backtraceBuffer[i] == 0 ||
            frame.previous == 0 ||
-           bs_mach_copyMem(frame.previous, &frame, sizeof(frame)) != KERN_SUCCESS) {
+           br_mach_copyMem(frame.previous, &frame, sizeof(frame)) != KERN_SUCCESS) {
             break;
         }
     }
     
     int backtraceLength = i;
     Dl_info symbolicated[backtraceLength];
-    bs_symbolicate(backtraceBuffer, symbolicated, backtraceLength, 0);
+    br_symbolicate(backtraceBuffer, symbolicated, backtraceLength, 0);
     for (int i = 0; i < backtraceLength; ++i) {
-        NSDictionary * backtrace = bs_backtraceEntry(i, backtraceBuffer[i], &symbolicated[i]);
+        NSDictionary * backtrace = br_backtraceEntry(i, backtraceBuffer[i], &symbolicated[i]);
         [backtraces addObject: backtrace];
     }
 
@@ -155,7 +151,7 @@ NSArray<NSDictionary *>* _bs_backtraceOfThread(thread_t thread, NSError **error)
 }
 
 #pragma -mark Convert NSThread to Mach thread
-thread_t bs_machThreadFromNSThread(NSThread *nsthread) {
+thread_t br_machThreadFromNSThread(NSThread *nsthread) {
     char name[256];
     mach_msg_type_number_t count;
     thread_act_array_t list;
@@ -191,13 +187,13 @@ thread_t bs_machThreadFromNSThread(NSThread *nsthread) {
 }
 
 #pragma -mark GenerateBacbsrackEnrty
-NSDictionary* bs_backtraceEntry(const int entryNum,
+NSDictionary* br_backtraceEntry(const int entryNum,
                             const uintptr_t address,
                             const Dl_info* const dlInfo) {
     char faddrBuff[20];
     char saddrBuff[20];
     
-    const char* fname = bs_lastPathEntry(dlInfo->dli_fname);
+    const char* fname = br_lastPathEntry(dlInfo->dli_fname);
     if(fname == NULL) {
         sprintf(faddrBuff, POINTER_FMT, (uintptr_t)dlInfo->dli_fbase);
         fname = faddrBuff;
@@ -212,15 +208,15 @@ NSDictionary* bs_backtraceEntry(const int entryNum,
     }
 
     return @{
-             BacktraceImageName : [NSString stringWithFormat:@"%s", fname],
-             BacktraceAddress : [NSNumber numberWithUnsignedInteger:address],
+             BRBacktraceImageName : [NSString stringWithFormat:@"%s", fname],
+             BRBacktraceAddress : [NSNumber numberWithUnsignedInteger:address],
 //             BacktraceAddress : [NSString stringWithFormat:@"0x%08" PRIxPTR, (uintptr_t)address],
-             BacktraceFuncName : [NSString stringWithFormat:@"%s", sname],
-             BacktraceOffset : [NSNumber numberWithUnsignedInteger:offset]
+             BRBacktraceFuncName : [NSString stringWithFormat:@"%s", sname],
+             BRBacktraceOffset : [NSNumber numberWithUnsignedInteger:offset]
          };
 }
 
-const char* bs_lastPathEntry(const char* const path) {
+const char* br_lastPathEntry(const char* const path) {
     if(path == NULL) {
         return NULL;
     }
@@ -230,25 +226,25 @@ const char* bs_lastPathEntry(const char* const path) {
 }
 
 #pragma -mark HandleMachineContext
-bool bs_fillThreadStateIntoMachineContext(thread_t thread, _STRUCT_MCONTEXT *machineContext) {
-    mach_msg_type_number_t state_count = BS_THREAD_STATE_COUNT;
-    kern_return_t kr = thread_get_state(thread, BS_THREAD_STATE, (thread_state_t)&machineContext->__ss, &state_count);
+bool br_fillThreadStateIntoMachineContext(thread_t thread, _STRUCT_MCONTEXT *machineContext) {
+    mach_msg_type_number_t state_count = BR_THREAD_STATE_COUNT;
+    kern_return_t kr = thread_get_state(thread, BR_THREAD_STATE, (thread_state_t)&machineContext->__ss, &state_count);
     return (kr == KERN_SUCCESS);
 }
 
-uintptr_t bs_mach_framePointer(mcontext_t const machineContext){
-    return machineContext->__ss.BS_FRAME_POINTER;
+uintptr_t br_mach_framePointer(mcontext_t const machineContext){
+    return machineContext->__ss.BR_FRAME_POINTER;
 }
 
-uintptr_t bs_mach_stackPointer(mcontext_t const machineContext){
-    return machineContext->__ss.BS_STACK_POINTER;
+uintptr_t br_mach_stackPointer(mcontext_t const machineContext){
+    return machineContext->__ss.BR_STACK_POINTER;
 }
 
-uintptr_t bs_mach_instructionAddress(mcontext_t const machineContext){
-    return machineContext->__ss.BS_INSTRUCTION_ADDRESS;
+uintptr_t br_mach_instructionAddress(mcontext_t const machineContext){
+    return machineContext->__ss.BR_INSTRUCTION_ADDRESS;
 }
 
-uintptr_t bs_mach_linkRegister(mcontext_t const machineContext){
+uintptr_t br_mach_linkRegister(mcontext_t const machineContext){
 #if defined(__i386__) || defined(__x86_64__)
     return 0;
 #else
@@ -256,42 +252,42 @@ uintptr_t bs_mach_linkRegister(mcontext_t const machineContext){
 #endif
 }
 
-kern_return_t bs_mach_copyMem(const void *const src, void *const dst, const size_t numBytes){
+kern_return_t br_mach_copyMem(const void *const src, void *const dst, const size_t numBytes){
     vm_size_t bytesCopied = 0;
     return vm_read_overwrite(mach_task_self(), (vm_address_t)src, (vm_size_t)numBytes, (vm_address_t)dst, &bytesCopied);
 }
 
 #pragma -mark Symbolicate
-void bs_symbolicate(const uintptr_t* const backtraceBuffer,
+void br_symbolicate(const uintptr_t* const backtraceBuffer,
                     Dl_info* const symbolsBuffer,
                     const int numEntries,
                     const int skippedEntries){
     int i = 0;
     
     if(!skippedEntries && i < numEntries) {
-        bs_dladdr(backtraceBuffer[i], &symbolsBuffer[i]);
+        br_dladdr(backtraceBuffer[i], &symbolsBuffer[i]);
         i++;
     }
     
     for(; i < numEntries; i++) {
-        bs_dladdr(CALL_INSTRUCTION_FROM_RETURN_ADDRESS(backtraceBuffer[i]), &symbolsBuffer[i]);
+        br_dladdr(CALL_INSTRUCTION_FROM_RETURN_ADDRESS(backtraceBuffer[i]), &symbolsBuffer[i]);
     }
 }
 
-bool bs_dladdr(const uintptr_t address, Dl_info* const info) {
+bool br_dladdr(const uintptr_t address, Dl_info* const info) {
     info->dli_fname = NULL;
     info->dli_fbase = NULL;
     info->dli_sname = NULL;
     info->dli_saddr = NULL;
     
-    const uint32_t idx = bs_imageIndexContainingAddress(address);
+    const uint32_t idx = br_imageIndexContainingAddress(address);
     if(idx == UINT_MAX) {
         return false;
     }
     const struct mach_header* header = _dyld_get_image_header(idx);
     const uintptr_t imageVMAddrSlide = (uintptr_t)_dyld_get_image_vmaddr_slide(idx);
     const uintptr_t addressWithSlide = address - imageVMAddrSlide;
-    const uintptr_t segmentBase = bs_segmentBaseOfImageIndex(idx) + imageVMAddrSlide;
+    const uintptr_t segmentBase = br_segmentBaseOfImageIndex(idx) + imageVMAddrSlide;
     if(segmentBase == 0) {
         return false;
     }
@@ -300,9 +296,9 @@ bool bs_dladdr(const uintptr_t address, Dl_info* const info) {
     info->dli_fbase = (void*)header;
     
     // Find symbol tables and get whichever symbol is closest to the address.
-    const BS_NLIST* bestMatch = NULL;
+    const nlist_t* bestMatch = NULL;
     uintptr_t bestDistance = ULONG_MAX;
-    uintptr_t cmdPtr = bs_firstCmdAfterHeader(header);
+    uintptr_t cmdPtr = br_firstCmdAfterHeader(header);
     if(cmdPtr == 0) {
         return false;
     }
@@ -310,7 +306,7 @@ bool bs_dladdr(const uintptr_t address, Dl_info* const info) {
         const struct load_command* loadCmd = (struct load_command*)cmdPtr;
         if(loadCmd->cmd == LC_SYMTAB) {
             const struct symtab_command* symtabCmd = (struct symtab_command*)cmdPtr;
-            const BS_NLIST* symbolTable = (BS_NLIST*)(segmentBase + symtabCmd->symoff);
+            const nlist_t* symbolTable = (nlist_t*)(segmentBase + symtabCmd->symoff);
             const uintptr_t stringTable = segmentBase + symtabCmd->stroff;
             
             for(uint32_t iSym = 0; iSym < symtabCmd->nsyms; iSym++) {
@@ -343,7 +339,7 @@ bool bs_dladdr(const uintptr_t address, Dl_info* const info) {
     return true;
 }
 
-uintptr_t bs_firstCmdAfterHeader(const struct mach_header* const header) {
+uintptr_t br_firstCmdAfterHeader(const struct mach_header* const header) {
     switch(header->magic) {
         case MH_MAGIC:
         case MH_CIGAM:
@@ -356,7 +352,7 @@ uintptr_t bs_firstCmdAfterHeader(const struct mach_header* const header) {
     }
 }
 
-uint32_t bs_imageIndexContainingAddress(const uintptr_t address) {
+uint32_t br_imageIndexContainingAddress(const uintptr_t address) {
     const uint32_t imageCount = _dyld_image_count();
     const struct mach_header* header = 0;
     
@@ -365,7 +361,7 @@ uint32_t bs_imageIndexContainingAddress(const uintptr_t address) {
         if(header != NULL) {
             // Look for a segment command with this address within its range.
             uintptr_t addressWSlide = address - (uintptr_t)_dyld_get_image_vmaddr_slide(iImg);
-            uintptr_t cmdPtr = bs_firstCmdAfterHeader(header);
+            uintptr_t cmdPtr = br_firstCmdAfterHeader(header);
             if(cmdPtr == 0) {
                 continue;
             }
@@ -392,11 +388,11 @@ uint32_t bs_imageIndexContainingAddress(const uintptr_t address) {
     return UINT_MAX;
 }
 
-uintptr_t bs_segmentBaseOfImageIndex(const uint32_t idx) {
+uintptr_t br_segmentBaseOfImageIndex(const uint32_t idx) {
     const struct mach_header* header = _dyld_get_image_header(idx);
     
     // Look for a segment command and return the file image address.
-    uintptr_t cmdPtr = bs_firstCmdAfterHeader(header);
+    uintptr_t cmdPtr = br_firstCmdAfterHeader(header);
     if(cmdPtr == 0) {
         return 0;
     }

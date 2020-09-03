@@ -7,17 +7,24 @@
 //
 
 import Foundation
+import Darwin
 
 /// 获取主线程调用栈
-public func backtraceOfMainThread() -> [BacktraceFrame] {
-    return bs_backtraceOfNSThread(Thread.main)
+public func BacktraceOfMainThread() -> [BacktraceFrame] {
+    return br_backtraceOfNSThread(Thread.main)
         .map(BacktraceFrame.init(info: ))
 }
 
 /// 获取当前线程调用栈
-public func backtraceOfCurrentThread() -> [BacktraceFrame] {
-    return bs_backtraceOfNSThread(Thread.current)
+public func BacktraceOfCurrentThread() -> [BacktraceFrame] {
+    return br_backtraceOfNSThread(Thread.current)
         .map(BacktraceFrame.init(info: ))
+}
+
+/// 获取指定线程调用栈
+public func BacktraceOf(thread: Thread) -> [BacktraceFrame] {
+    return br_backtraceOfNSThread(thread)
+        .map(BacktraceFrame.init(info: ))    
 }
 
 /**
@@ -62,11 +69,11 @@ public struct BacktraceFrame: CustomDebugStringConvertible {
     }
     
     internal init(info: [AnyHashable: Any]) {
-        self.imageName = (info[BacktraceImageName] as? String) ?? "???"
-        self.address = (info[BacktraceAddress] as? UInt) ?? 0
-        self.offset = (info[BacktraceOffset] as? Int) ?? 0
+        self.imageName = (info[BRBacktraceImageName] as? String) ?? "???"
+        self.address = (info[BRBacktraceAddress] as? UInt) ?? 0
+        self.offset = (info[BRBacktraceOffset] as? Int) ?? 0
         self.funcName = _stdlib_demangleName(
-            (info[BacktraceFuncName] as? String) ?? "???"
+            (info[BRBacktraceFuncName] as? String) ?? "???"
         )
     }
 }

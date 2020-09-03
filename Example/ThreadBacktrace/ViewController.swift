@@ -14,12 +14,16 @@ class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        backtraceOfMainThread().log()
+        funcBacktrace(5)
     }
 
-    override func didReceiveMemoryWarning() {
-        super.didReceiveMemoryWarning()
-        // Dispose of any resources that can be recreated.
+    func funcBacktrace(_ level: Int) {
+        if level == 0 {
+            BacktraceOfMainThread().log()
+            return
+        }
+        
+        funcBacktrace(level - 1)
     }
 
 }

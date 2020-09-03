@@ -15,10 +15,10 @@ Pod::Spec.new do |s|
 TODO: Add long description of the pod here.
                        DESC
 
-  s.homepage         = 'https://github.com/495929699g@gmail.com/ThreadBacktrace'
+  s.homepage         = 'https://github.com/Boy-Rong/ThreadBacktrace'
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = { 'rongheng' => '495929699g@gmail.com' }
-  s.source           = { :git => 'https://github.com/495929699g@gmail.com/ThreadBacktrace.git', :tag => s.version.to_s }
+  s.source           = { :git => 'https://github.com/Boy-Rong/ThreadBacktrace.git', :tag => s.version.to_s }
 
   s.ios.deployment_target = '8.0'
 
