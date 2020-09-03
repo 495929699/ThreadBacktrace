@@ -22,7 +22,7 @@ pod 'ThreadBacktrace'
 
 ## Author
 
-495929699g@gmail.com, 495929699g@gmail.com
+rongshao, rongheng.rh@gmail.com
 
 ## License
 
