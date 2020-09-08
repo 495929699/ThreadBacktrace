@@ -87,6 +87,22 @@ extension Array where Element == BacktraceFrame {
         }
         print("------------------------------------------------------")
     }
+    
+    public func info() -> String {
+        var result = ""
+        let line = "------------------------------------------------------"
+        
+        result += line
+        
+        for (i, value) in self.enumerated() {
+            result += String(format:"%-4ld %@", i,value.debugDescription)
+            result += "\n"
+        }
+        
+        result += line
+        
+        return result
+    }
 }
 
 @_silgen_name("swift_demangle")
