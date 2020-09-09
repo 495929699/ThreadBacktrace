@@ -10,129 +10,95 @@ import Foundation
 import Darwin
 
 /// 获取主线程调用栈
-public func BacktraceOfMainThread() -> [BacktraceFrame] {
-    return br_backtraceOfNSThread(Thread.main)
-        .map(BacktraceFrame.init(info: ))
+public func BacktraceOfMainThread() -> [String] {
+    return _mach_callstack(_machThread(from: .main))
+        .map { $0.info }
 }
 
 /// 获取当前线程调用栈
-public func BacktraceOfCurrentThread() -> [BacktraceFrame] {
-    return br_backtraceOfNSThread(Thread.current)
-        .map(BacktraceFrame.init(info: ))
+public func BacktraceOfCurrentThread() -> [String] {
+    return _mach_callstack(_machThread(from: .current))
+        .map { $0.info }
 }
 
-/// 获取指定线程调用栈
-public func BacktraceOf(thread: Thread) -> [BacktraceFrame] {
-    return br_backtraceOfNSThread(thread)
-        .map(BacktraceFrame.init(info: ))    
+/// 获取指定线程调用栈数据 StackSymbol
+public func BacktraceOf(thread: Thread) -> [StackSymbol] {
+    return _mach_callstack(_machThread(from: thread))
 }
 
-/**
- NSArray<NSArray<NSDictionary*>*>* bs_backtraceOfAllThread() {
- thread_act_array_t threads;
- mach_msg_type_number_t thread_count = 0;
- const task_t this_task = mach_task_self();
- kern_return_t kr = task_threads(this_task, &threads, &thread_count);
- 
- NSMutableArray *result = [NSMutableArray array];
- if(kr != KERN_SUCCESS) {
- return result;
- }
- 
- for(int i = 0; i < thread_count; i++) {
- NSArray *array = _bs_backtraceOfThread(threads[i], nil);
- [result addObject:array];
- }
- return [result copy];
- }
- */
 
-/// 线程回调栈帧模型
-public struct BacktraceFrame: CustomDebugStringConvertible {
-    /// 镜像名/模块名
-    let imageName: String
-    /// 方法地址
-    let address: UInt
-    /// 方法名
-    let funcName: String
-    /// 偏移量
-    let offset: Int
+//MARK: 线程相关 私有
+@_silgen_name("mach_backtrace")
+public func backtrace(_ thread: thread_t,
+                      stack: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
+                      maxSymbols: Int32) -> Int32
+
+/// 获取 指定mach线程 回调栈
+private func _mach_callstack(_ thread: thread_t) -> [StackSymbol] {
+    var symbols : [StackSymbol] = []
+    let stackSize : UInt32 = 128
+    let addrs = UnsafeMutablePointer<UnsafeMutableRawPointer?>.allocate(capacity: Int(stackSize))
+    defer { addrs.deallocate() }
+    let frameCount = backtrace(thread, stack: addrs, maxSymbols: Int32(stackSize))
     
-    public var debugDescription: String {
-        return imageName.utf8CString.withUnsafeBufferPointer { (imageBuffer: UnsafeBufferPointer<CChar>) -> String in
-            #if arch(x86_64) || arch(arm64)
-            return String(format: "%-35s 0x%016llx %@ + %ld", UInt(bitPattern: imageBuffer.baseAddress), address, funcName, offset)
-            #else
-            return String(format: "%-35s 0x%08lx %@ + %ld", UInt(bitPattern: imageBuffer.baseAddress), address, funcName, offset)
-            #endif
+    let buf = UnsafeBufferPointer(start: addrs, count: Int(frameCount))
+
+    for (index, addr) in buf.enumerated() {
+        guard let addr = addr else { continue }
+        let addrValue = UInt(bitPattern: addr)
+        let symbol = _stackSymbol(from: addrValue, index: index)
+        symbols.append(symbol)
+    }
+    return symbols
+}
+
+/// Thread to mach 线程
+private func _machThread(from thread: Thread) -> thread_t {
+    var name: [Int8] = [Int8]()
+    var count: mach_msg_type_number_t = 0
+    var threads: thread_act_array_t!
+
+    guard task_threads(mach_task_self_, &(threads), &count) == KERN_SUCCESS else {
+        return mach_thread_self()
+    }
+
+    if thread.isMainThread {
+        return get_mach_main_thread()
+    }
+
+    let originName = thread.name
+
+    for i in 0 ..< count {
+        let index = Int(i)
+        if let p_thread = pthread_from_mach_thread_np((threads[index])) {
+            name.append(Int8(Character("\0").ascii ?? 0))
+            pthread_getname_np(p_thread, &name, MemoryLayout<Int8>.size * 256)
+            if (strcmp(&name, (thread.name!.ascii)) == 0) {
+                thread.name = originName
+                return threads[index]
+            }
         }
     }
-    
-    internal init(info: [AnyHashable: Any]) {
-        self.imageName = (info[BRBacktraceImageName] as? String) ?? "???"
-        self.address = (info[BRBacktraceAddress] as? UInt) ?? 0
-        self.offset = (info[BRBacktraceOffset] as? Int) ?? 0
-        self.funcName = _stdlib_demangleName(
-            (info[BRBacktraceFuncName] as? String) ?? "???"
-        )
+
+    thread.name = originName
+    return mach_thread_self()
+}
+
+extension Character {
+    var isAscii: Bool {
+        return unicodeScalars.allSatisfy { $0.isASCII }
+    }
+    var ascii: UInt32? {
+        return isAscii ? unicodeScalars.first?.value : nil
     }
 }
 
-extension Array where Element == BacktraceFrame {
-    /// 打印调用栈
-    public func log() {
-        print("------------------------------------------------------")
-        for (i, value) in self.enumerated() {
-            print(String(format:"%-4ld %@", i,value.debugDescription))
+extension String {
+    var ascii : [Int8] {
+        var unicodeValues = [Int8]()
+        for code in unicodeScalars {
+            unicodeValues.append(Int8(code.value))
         }
-        print("------------------------------------------------------")
-    }
-    
-    public func info() -> String {
-        var result = ""
-        let line = "------------------------------------------------------"
-        
-        result += line
-        
-        for (i, value) in self.enumerated() {
-            result += String(format:"%-4ld %@", i,value.debugDescription)
-            result += "\n"
-        }
-        
-        result += line
-        
-        return result
+        return unicodeValues
     }
 }
-
-@_silgen_name("swift_demangle")
-func _stdlib_demangleImpl(
-    mangledName: UnsafePointer<CChar>?,
-    mangledNameLength: UInt,
-    outputBuffer: UnsafeMutablePointer<CChar>?,
-    outputBufferSize: UnsafeMutablePointer<UInt>?,
-    flags: UInt32
-    ) -> UnsafeMutablePointer<CChar>?
-
-/// 将Swift方法名还原
-func _stdlib_demangleName(_ mangledName: String) -> String {
-    return mangledName.utf8CString.withUnsafeBufferPointer {
-        (mangledNameUTF8CStr) in
-        
-        let demangledNamePtr = _stdlib_demangleImpl(
-            mangledName: mangledNameUTF8CStr.baseAddress,
-            mangledNameLength: UInt(mangledNameUTF8CStr.count - 1),
-            outputBuffer: nil,
-            outputBufferSize: nil,
-            flags: 0)
-        
-        if let demangledNamePtr = demangledNamePtr {
-            let demangledName = String(cString: demangledNamePtr)
-            free(demangledNamePtr)
-            return demangledName
-        }
-        return mangledName
-    }
-}
-
-
