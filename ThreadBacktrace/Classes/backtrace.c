@@ -1,11 +1,12 @@
 //
-//  ThreadBacktrace.c
-//  ThreadBacktrace
+//  backtrace.c
+//  backtrace
 //
-//  Created by rongheng on 2020/9/9.
+//  Created by 荣恒 on 2019/9/5.
+//  Copyright © 2019 荣恒. All rights reserved.
 //
 
-#include "ThreadBacktrace.h"
+#include "backtrace.h"
 
 /// 主线程 ID 利用 C 构造函数设置
 static mach_port_t _main_thread_id;

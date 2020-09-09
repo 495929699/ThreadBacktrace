@@ -8,7 +8,7 @@
 
 Pod::Spec.new do |s|
   s.name             = 'ThreadBacktrace'
-  s.version          = '0.1.3'
+  s.version          = '0.1.4'
   s.summary          = '获取线程调用栈'
 
   s.description      = <<-DESC
@@ -23,6 +23,6 @@ TODO: Add long description of the pod here.
   s.ios.deployment_target = '8.0'
   s.swift_version = '5.0'
 
-  s.source_files = 'ThreadBacktrace/Classes/*.{h,c,,swift}'
+  s.source_files = 'ThreadBacktrace/Classes/*.{h,c,swift}'
   
 end
