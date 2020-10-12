@@ -71,10 +71,15 @@ func _stdlib_demangleName(_ mangledName: String) -> String {
 /// 创建符号
 func _stackSymbol(from address: UInt, index: Int) -> StackSymbol {
     var info = dl_info()
-    dladdr(UnsafeRawPointer(bitPattern: address), &info)
+    _dladdr(address, &info)
+    
+    /*
+         dladdr(UnsafeRawPointer(bitPattern: address), &info)
+         可用此接口验证 dl_info 地址数据是否正确
+     */
 
     return StackSymbol(symbol: _symbol(info: info),
-                       file: String(cString: info.dli_fname),
+                       file: _dli_fname(with: info),
                        address: address,
                        symbolAddress: unsafeBitCast(info.dli_saddr, to: UInt.self),
                        image: _image(info: info),
@@ -128,5 +133,14 @@ private func _offset(info: dl_info, address: UInt) -> Int {
     }
     else {
         return Int(address - UInt(bitPattern: info.dli_saddr))
+    }
+}
+
+private func _dli_fname(with info: dl_info) -> String {
+    if has_dli_fname(info) {
+        return String(cString: info.dli_fname)
+    }
+    else {
+        return "-"
     }
 }

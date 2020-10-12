@@ -20,3 +20,7 @@ void _setup_main_thread() {
 mach_port_t get_mach_main_thread() {
     return _main_thread_id;
 }
+
+bool has_dli_fname(struct dl_info info) {
+    return info.dli_fname != NULL;
+}

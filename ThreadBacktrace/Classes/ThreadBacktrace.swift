@@ -54,11 +54,7 @@ private func _mach_callstack(_ thread: thread_t) -> [StackSymbol] {
 
 /// Thread to mach 线程
 private func _machThread(from thread: Thread) -> thread_t {
-    var name: [Int8] = [Int8]()
-    var count: mach_msg_type_number_t = 0
-    var threads: thread_act_array_t!
-
-    guard task_threads(mach_task_self_, &(threads), &count) == KERN_SUCCESS else {
+    guard let (threads, count) = _machAllThread() else {
         return mach_thread_self()
     }
 
@@ -66,8 +62,9 @@ private func _machThread(from thread: Thread) -> thread_t {
         return get_mach_main_thread()
     }
 
+    var name : [Int8] = []
     let originName = thread.name
-
+    
     for i in 0 ..< count {
         let index = Int(i)
         if let p_thread = pthread_from_mach_thread_np((threads[index])) {
@@ -84,6 +81,23 @@ private func _machThread(from thread: Thread) -> thread_t {
     return mach_thread_self()
 }
 
+/// 获取所有线程
+private func _machAllThread() -> (thread_act_array_t, mach_msg_type_number_t)? {
+    /// 线程List
+    var threads : thread_act_array_t?
+    /// 线程数
+    var count : mach_msg_type_number_t = 0
+    /// 进程 ID
+    let task = mach_task_self_
+    
+    guard task_threads(task, &(threads), &count) == KERN_SUCCESS else {
+        return nil
+    }
+    
+    return (threads!, count)
+}
+
+//MARK: extension
 extension Character {
     var isAscii: Bool {
         return unicodeScalars.allSatisfy { $0.isASCII }
