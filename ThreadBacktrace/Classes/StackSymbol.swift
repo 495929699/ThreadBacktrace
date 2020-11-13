@@ -7,14 +7,16 @@
 //
 
 import Foundation
+import MachO
 
+/// 解析后符号结构
 public struct StackSymbol {
     public let symbol: String
     public let file: String
     public let address: UInt
     public let symbolAddress: UInt
     public let image: String
-    public let offset: Int
+    public let offset: UInt
     public let index: Int
     
     public var demangledSymbol: String {
@@ -66,13 +68,14 @@ func _stdlib_demangleName(_ mangledName: String) -> String {
 }
 
 
-//MARK: private 快捷方法
-
+//MARK: 符号表解析符号
+//#if DEBUG
+//
 /// 创建符号
-func _stackSymbol(from address: UInt, index: Int) -> StackSymbol {
+func dl_stackSymbol(from address: UInt, index: Int) -> StackSymbol {
     var info = dl_info()
     _dladdr(address, &info)
-    
+
     /*
          dladdr(UnsafeRawPointer(bitPattern: address), &info)
          可用此接口验证 dl_info 地址数据是否正确
@@ -87,6 +90,29 @@ func _stackSymbol(from address: UInt, index: Int) -> StackSymbol {
                        index: index
     )
 }
+
+//#else
+
+/// 创建符号
+func _stackSymbol(from address: UInt, index: Int) -> StackSymbol {
+    var info = dl_info()
+    
+    _dladdr(address, &info)
+    
+//    let image_idx = AppImageIndex()
+//    info.dli_fname = _dyld_get_image_name(image_idx)
+
+    return StackSymbol(symbol: _symbol(address),
+                       file: _dli_fname(with: info),
+                       address: address,
+                       symbolAddress: unsafeBitCast(info.dli_saddr, to: UInt.self),
+                       image: _image(info: info),
+                       offset: _offset(info: info, address: address),
+                       index: index
+    )
+}
+
+//#endif
 
 /// the symbol nearest the address
 private func _symbol(info: dl_info) -> String {
@@ -105,6 +131,24 @@ private func _symbol(info: dl_info) -> String {
     }
 }
 
+/// 解析符号
+private func _symbol(_ address: UInt) -> String {
+    let symbolTable = _appSymbolTable
+    
+    let baseAddress = address - UInt(_aslr)
+    
+    guard
+        !symbolTable.isEmpty,
+        baseAddress <= symbolTable.last!.address,
+        let symbol = symbolTable
+            .filter({ $0.address <= baseAddress}).last
+    else {
+        return "not symbol"
+    }
+
+    return symbol.name
+}
+
 /// thanks to https://github.com/mattgallagher/CwlUtils/blob/master/Sources/CwlUtils/CwlAddressInfo.swift
 /// the "image" (shared object pathname) for the instruction
 private func _image(info: dl_info) -> String {
@@ -120,19 +164,19 @@ private func _image(info: dl_info) -> String {
 }
 
 /// the address' offset relative to the nearest symbol
-private func _offset(info: dl_info, address: UInt) -> Int {
+private func _offset(info: dl_info, address: UInt) -> UInt {
     if
         let dli_sname = info.dli_sname,
         let _ = String(validatingUTF8: dli_sname) {
-        return Int(address - UInt(bitPattern: info.dli_saddr))
+        return address - UInt(bitPattern: info.dli_saddr)
     }
     else if
         let dli_fname = info.dli_fname,
         let _ = String(validatingUTF8: dli_fname) {
-        return Int(address - UInt(bitPattern: info.dli_fbase))
+        return address - UInt(bitPattern: info.dli_fbase)
     }
     else {
-        return Int(address - UInt(bitPattern: info.dli_saddr))
+        return address - UInt(bitPattern: info.dli_saddr)
     }
 }
 

@@ -26,6 +26,9 @@ public func BacktraceOf(thread: Thread) -> [StackSymbol] {
     return _mach_callstack(_machThread(from: thread))
 }
 
+public func Dl_BacktraceOfCurrentThread() -> [StackSymbol] {
+    return dl_mach_callstack(_machThread(from: .current))
+}
 
 //MARK: 线程相关 私有
 @_silgen_name("mach_backtrace")
@@ -47,6 +50,24 @@ private func _mach_callstack(_ thread: thread_t) -> [StackSymbol] {
         guard let addr = addr else { continue }
         let addrValue = UInt(bitPattern: addr)
         let symbol = _stackSymbol(from: addrValue, index: index)
+        symbols.append(symbol)
+    }
+    return symbols
+}
+
+private func dl_mach_callstack(_ thread: thread_t) -> [StackSymbol] {
+    var symbols : [StackSymbol] = []
+    let stackSize : UInt32 = 128
+    let addrs = UnsafeMutablePointer<UnsafeMutableRawPointer?>.allocate(capacity: Int(stackSize))
+    defer { addrs.deallocate() }
+    let frameCount = backtrace(thread, stack: addrs, maxSymbols: Int32(stackSize))
+    
+    let buf = UnsafeBufferPointer(start: addrs, count: Int(frameCount))
+
+    for (index, addr) in buf.enumerated() {
+        guard let addr = addr else { continue }
+        let addrValue = UInt(bitPattern: addr)
+        let symbol = dl_stackSymbol(from: addrValue, index: index)
         symbols.append(symbol)
     }
     return symbols
