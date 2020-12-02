@@ -5,9 +5,6 @@
 //  Created by rongheng on 2020/10/12.
 //
 
-#ifndef mach_symbol_h
-#define mach_symbol_h
-
 #include <sys/types.h>
 #include <dlfcn.h>
 
@@ -27,4 +24,4 @@ struct nlist {
 /// 解析堆栈符号
 bool _dladdr(const uintptr_t address, Dl_info* const info);
 
-#endif
+void _mach_all_segment(void);

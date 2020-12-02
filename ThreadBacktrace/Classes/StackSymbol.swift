@@ -93,15 +93,47 @@ func dl_stackSymbol(from address: UInt, index: Int) -> StackSymbol {
 
 //#else
 
+/// 判断地址是否在 Mach-O Text 段中
+func _isMachTextSegment(_ address: UInt) -> Bool {
+    return true
+}
+
+func _mach_segment() {
+    let pageZeroSegment = getsegbyname(MakeCString("__PAGEZERO")).pointee
+    let textSegment = getsegbyname(MakeCString("__TEXT")).pointee
+    let dataSegment = getsegbyname(MakeCString("__DATA")).pointee
+    let linkeditSegment = getsegbyname(MakeCString("__LINKEDIT")).pointee
+    
+    let segmentList = [
+        pageZeroSegment,
+        textSegment,
+        dataSegment,
+        linkeditSegment
+    ]
+    
+    let classlistSection = getsectbyname(MakeCString("__DATA"), MakeCString("__objc_classlist")).pointee
+    print("classlistSection: \(classlistSection)")
+    
+    print("<----------------------------->")
+    segmentList.forEach { segment in
+        print("segment: \(segment)  address: \(segment.vmaddr)   size: \(segment.vmsize)")
+    }
+    print("<----------------------------->")
+}
+
 /// 创建符号
 func _stackSymbol(from address: UInt, index: Int) -> StackSymbol {
     var info = dl_info()
     
-    _dladdr(address, &info)
+//    _dladdr(address, &info)
     
 //    let image_idx = AppImageIndex()
 //    info.dli_fname = _dyld_get_image_name(image_idx)
-
+    
+//    let addressIndex = _imageIndexContainingAddress(address);
+//    let imageNameP = _dyld_get_image_name(addressIndex);
+//    let imageNam = String(validatingUTF8: imageName)
+        
     return StackSymbol(symbol: _symbol(address),
                        file: _dli_fname(with: info),
                        address: address,
@@ -187,4 +219,12 @@ private func _dli_fname(with info: dl_info) -> String {
     else {
         return "-"
     }
+}
+
+/// String -> CSring
+func MakeCString(_ string: String) -> UnsafePointer<Int8> {
+    let count = string.utf8CString.count
+    let strP = UnsafeMutableBufferPointer<Int8>.allocate(capacity: count)
+    strP.initialize(from: string.utf8CString)
+    return UnsafePointer<Int8>(strP.baseAddress)!
 }

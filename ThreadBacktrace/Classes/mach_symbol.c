@@ -5,6 +5,7 @@
 //  Created by rongheng on 2020/10/12.
 //
 
+#include "mach_symbol.h"
 #include <mach/mach.h>
 #include <dlfcn.h>
 #include <pthread.h>
@@ -13,6 +14,10 @@
 #include <string.h>
 #include <mach-o/dyld.h>
 #include <mach-o/nlist.h>
+
+#include <mach-o/getsect.h>
+#include <objc/runtime.h>
+#include <stdio.h>
 
 #pragma mark - 平台定义
 #ifdef __LP64__
@@ -220,6 +225,41 @@ static uintptr_t _firstCmdAfterHeader(const struct mach_header* const header)
     }
 }
 
+void _mach_all_segment(void) {
+    
+    uint32_t execute_index;
+    
+    uint32_t image_count = _dyld_image_count();
+    for (uint32_t i = 0; i < image_count; i++) {
+        struct mach_header * image_header = _dyld_get_image_header(i);
+        if (image_header->filetype == MH_EXECUTE) {
+            execute_index = i;
+            break;
+        }
+    }
+    
+    struct section_64 *classlist_section = getsectbyname("__DATA", "__objc_classlist");
+    
+    size_t class_size = sizeof(Class);
+    uint64_t class_count = classlist_section->size / class_size;
+    
+    uint64_t aslr = _dyld_get_image_vmaddr_slide(execute_index);
+    Class first_class = (Class)(classlist_section->addr + aslr);
+    
+    for (uint i = 0; i < class_count; i++) {
+        Class class = (Class)(classlist_section->addr + aslr) + i;
+        printf("<--------------%s-------------->", class->name);
+        
+        unsigned int method_count;
+        Method method_list = class_copyMethodList(class, &method_count);
+        
+        for (int j = 0; j < method_count; j++) {
+            struct objc_method method = method_list[j];
+            printf("method_name: %s,    method_addr: %p", method.method_name, method.method_imp);
+        }
+        
+        printf("<----------------------------->");
+    }
 
-
-
+    printf("-----------------------------------------");
+}

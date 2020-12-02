@@ -30,6 +30,24 @@ public func Dl_BacktraceOfCurrentThread() -> [StackSymbol] {
     return dl_mach_callstack(_machThread(from: .current))
 }
 
+public func Symbolic(of stack : [String]) -> [String] {
+    guard !stack.isEmpty else {
+        return []
+    }
+        
+    let address : [UInt64] = stack.map { value in
+        var address : UInt64 = 0
+        Scanner(string: value).scanHexInt64(&address)
+        return address
+    }
+    
+    let symbols : [String] = address.map { value in
+        return _stackSymbol(from: UInt(value), index: 0).info
+    }
+    
+    return symbols
+}
+
 //MARK: 线程相关 私有
 @_silgen_name("mach_backtrace")
 public func backtrace(_ thread: thread_t,

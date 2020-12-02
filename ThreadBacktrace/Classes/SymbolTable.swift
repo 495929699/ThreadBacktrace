@@ -13,7 +13,7 @@ import MachO
 public struct SymbolEntry: Codable {
     public let `class`: String
     public let name: String
-    public let address: Int64
+    public let address: UInt
     
     public var log: String {
         return "calss: \(self.class)    name:\(name)   address:\(String(address, radix: 16))\n"
@@ -42,9 +42,13 @@ public func InitializeSymbolTable() {
     _symbolQueue.async {
         let version = UserDefaults.standard.string(forKey: Key.version)
         let appVersion = Bundle.main.infoDictionary?[Key.appVersion] as? String
+        let hasSymbolTable = FileManager.default
+            .fileExists(atPath: symbolTableURL?.absoluteString ?? "")
         
         // 版本号发生变化时才重新生成符号表
-        if version != appVersion && appVersion != nil {
+//        if (version != appVersion && appVersion != nil) || !hasSymbolTable {
+          if true {
+            
             _appSymbolTable = AppSymbolTable()
             
             SaveSymbolTable(_appSymbolTable)
@@ -57,6 +61,8 @@ public func InitializeSymbolTable() {
             _appSymbolTable = GetSymbolTable()
             print(_appSymbolTable.count)
         }
+        
+//        _mach_all_segment()
     }
 }
 
@@ -75,7 +81,7 @@ func AppSymbolTable() -> [SymbolEntry] {
     }
     
     // 当前运行 aslr
-    let aslr = ASLR
+    let aslr = _aslr
     
     // 符号表
     var symbloTable : [SymbolEntry] = [];
@@ -100,16 +106,17 @@ func AppSymbolTable() -> [SymbolEntry] {
             let imp = method_getImplementation(method)
             let name = NSStringFromSelector(sel) as String
             // Mach-O符号地址 = 方法表地址(真实运行地址) - ASLR
-            let address = Int(bitPattern: imp) - aslr
+            let address = UInt(bitPattern: imp) - UInt(aslr)
             let symbol = SymbolEntry(
                 class: className,
                 name: name,
-                address: Int64(address)
+                address: address
             )
             
             symbloTable.append(symbol)
             
-            print("class : \(className)  sel: \(sel) imp:\(imp)")
+            let classAddress = objc_getClass(MakeCString(className)) as! AnyObject
+            print("---->class : \(className) address: \(ObjectIdentifier(classAddress))  sel: \(sel) imp:\(imp)")
         }
         
     }
@@ -118,7 +125,7 @@ func AppSymbolTable() -> [SymbolEntry] {
     symbloTable.sort { (entry0, entry1) -> Bool in
         entry0.address < entry1.address
     }
-     
+    
     return symbloTable
 }
 
