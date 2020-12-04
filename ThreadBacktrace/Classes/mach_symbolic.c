@@ -1,11 +1,11 @@
 //
-//  mach_symbol.c
+//  mach_symbolic.c
 //  ThreadBacktrace
 //
 //  Created by rongheng on 2020/10/12.
 //
 
-#include "mach_symbol.h"
+#include "mach_symbolic.h"
 #include <mach/mach.h>
 #include <dlfcn.h>
 #include <pthread.h>

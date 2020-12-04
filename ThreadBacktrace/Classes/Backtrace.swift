@@ -85,7 +85,7 @@ private func dl_mach_callstack(_ thread: thread_t) -> [StackSymbol] {
     for (index, addr) in buf.enumerated() {
         guard let addr = addr else { continue }
         let addrValue = UInt(bitPattern: addr)
-        let symbol = dl_stackSymbol(from: addrValue, index: index)
+        let symbol = _stackSymbol(from: addrValue, index: index)
         symbols.append(symbol)
     }
     return symbols

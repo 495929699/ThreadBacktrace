@@ -1,5 +1,5 @@
 //
-//  mach_symbol.h
+//  mach_symbolic.h
 //  ThreadBacktrace
 //
 //  Created by rongheng on 2020/10/12.
