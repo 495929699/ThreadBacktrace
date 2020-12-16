@@ -7,7 +7,19 @@
 
 ## Example
 
-To run the example project, clone the repo, and run `pod install` from the Example directory first.
+获取主线程调用栈
+```swift
+    BacktraceOfMainThread()
+```
+获取当前线程调用栈
+```swift
+    BacktraceOfMainThread()
+```
+
+解析堆栈符号，需真实的 ASLR
+```swift
+Symbolic(of stack: [UInt], aslr: Int)
+```
 
 ## Requirements
 
@@ -22,7 +34,7 @@ pod 'ThreadBacktrace'
 
 ## Author
 
-rongshao, rongheng.rh@gmail.com
+公子荣, rongheng.rh@gmail.com
 
 ## License
 
