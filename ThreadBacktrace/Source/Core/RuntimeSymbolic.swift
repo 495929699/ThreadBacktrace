@@ -10,14 +10,14 @@ import Foundation
 import MachO
 
 //MARK: 动态符号表解析
-/// 解析符号
+/// 根据 Runtime 获取的符号表 解析符号
 /// - Parameters:
 ///   - address: 真实地址
 ///   - index: 序号
 ///   - aslr: address 对应的 ASLR，默认为当前进程的 ASLR
-func _symbolic(address: UInt, index: Int, aslr: Int = _AppASLR) -> StackSymbol {
+func _symbolic(_ address: UInt, index: Int, aslr: Int = _appASLR) -> StackSymbol {
     
-    guard let symbol = _symbol(address, aslr: aslr) else {
+    guard let symbol = _symbolic(address, aslr: aslr) else {
         return StackSymbol(symbol: "not symbol",
                            file: "",
                            address: address,
@@ -31,8 +31,8 @@ func _symbolic(address: UInt, index: Int, aslr: Int = _AppASLR) -> StackSymbol {
                        file: "",
                        address: address,
                        symbolAddress: symbol.address,
-                       image: "APP",
-                       offset: UInt(address - symbol.address),
+                       image: _appImageName,
+                       offset: address - UInt(aslr) - symbol.address,
                        index: index)
 }
 
@@ -40,26 +40,28 @@ func _symbolic(address: UInt, index: Int, aslr: Int = _AppASLR) -> StackSymbol {
 /// - Parameters:
 ///   - address: 真实地址
 ///   - aslr: 真实地址对应的 ASLR
-private func _symbol(_ address: UInt, aslr: Int) -> SymbolEntry? {
-    let symbolTable = _AppSymbolTable
+private func _symbolic(_ address: UInt, aslr: Int) -> SymbolEntry? {
+    let symbolTable = _appSymbolTable
     
     let baseAddress = address - UInt(aslr)
     
-    guard
-        !symbolTable.isEmpty,
-        baseAddress <= symbolTable.last!.address,
-        let symbol = symbolTable
-            .filter({ $0.address <= baseAddress}).last
-    else {
+    guard !symbolTable.isEmpty else {
         return nil
     }
     
-    return symbol
+    // 符号表地址区间，符号表已按地址升序排序
+    let addressInterval = symbolTable.first!.address ... symbolTable.last!.address
+    guard addressInterval.contains(baseAddress) else {
+        return nil
+    }
+    
+    // 取满足条件的第一个符号
+    return symbolTable.filter({ $0.address <= baseAddress}).last
 }
 
 //MARK: 存在符号表解析
-/// 创建符号
-func _stackSymbol(from address: UInt, index: Int) -> StackSymbol {
+/// 根据 Mach-O 符号表 解析符号
+func _stackSymbol(_ address: UInt, index: Int) -> StackSymbol {
     var info = dl_info()
     _dladdr(address, &info)
 
@@ -148,25 +150,25 @@ func _isMachTextSegment(_ address: UInt) -> Bool {
     return true
 }
 
-func _mach_segment() {
-    let pageZeroSegment = getsegbyname(MakeCString("__PAGEZERO")).pointee
-    let textSegment = getsegbyname(MakeCString("__TEXT")).pointee
-    let dataSegment = getsegbyname(MakeCString("__DATA")).pointee
-    let linkeditSegment = getsegbyname(MakeCString("__LINKEDIT")).pointee
-    
-    let segmentList = [
-        pageZeroSegment,
-        textSegment,
-        dataSegment,
-        linkeditSegment
-    ]
-    
-    let classlistSection = getsectbyname(MakeCString("__DATA"), MakeCString("__objc_classlist")).pointee
-    print("classlistSection: \(classlistSection)")
-    
-    print("<----------------------------->")
-    segmentList.forEach { segment in
-        print("segment: \(segment)  address: \(segment.vmaddr)   size: \(segment.vmsize)")
-    }
-    print("<----------------------------->")
-}
+//func _mach_segment() {
+//    let pageZeroSegment = getsegbyname(MakeCString("__PAGEZERO")).pointee
+//    let textSegment = getsegbyname(MakeCString("__TEXT")).pointee
+//    let dataSegment = getsegbyname(MakeCString("__DATA")).pointee
+//    let linkeditSegment = getsegbyname(MakeCString("__LINKEDIT")).pointee
+//
+//    let segmentList = [
+//        pageZeroSegment,
+//        textSegment,
+//        dataSegment,
+//        linkeditSegment
+//    ]
+//
+//    let classlistSection = getsectbyname(MakeCString("__DATA"), MakeCString("__objc_classlist")).pointee
+//    print("classlistSection: \(classlistSection)")
+//
+//    print("<----------------------------->")
+//    segmentList.forEach { segment in
+//        print("segment: \(segment)  address: \(segment.vmaddr)   size: \(segment.vmsize)")
+//    }
+//    print("<----------------------------->")
+//}

@@ -6,7 +6,7 @@
 //  Copyright © 2019 荣恒. All rights reserved.
 //
 
-#include "backtrace.h"
+#include "backtrace_help.h"
 
 /// 主线程 ID 利用 C 构造函数设置
 static mach_port_t _main_thread_id;

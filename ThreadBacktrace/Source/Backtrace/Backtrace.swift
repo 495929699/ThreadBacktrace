@@ -9,6 +9,7 @@
 import Foundation
 import Darwin
 
+//MARK: 对外接口
 /// 获取主线程调用栈
 public func BacktraceOfMainThread() -> [String] {
     return _mach_callstack(_machThread(from: .main))
@@ -22,70 +23,57 @@ public func BacktraceOfCurrentThread() -> [String] {
 }
 
 /// 获取指定线程调用栈数据 StackSymbol
-public func BacktraceOf(thread: Thread) -> [StackSymbol] {
+public func Backtrace(of thread: Thread) -> [StackSymbol] {
     return _mach_callstack(_machThread(from: thread))
 }
 
-public func Dl_BacktraceOfCurrentThread() -> [StackSymbol] {
-    return dl_mach_callstack(_machThread(from: .current))
-}
-
-public func Symbolic(of stack : [String]) -> [String] {
+/// 解析堆栈符号，需真实的 ASLR
+public func Symbolic(of stack: [UInt], aslr: Int) -> [String] {
     guard !stack.isEmpty else {
         return []
     }
-        
-    let address : [UInt64] = stack.map { value in
-        var address : UInt64 = 0
-        Scanner(string: value).scanHexInt64(&address)
-        return address
-    }
     
-    let symbols : [String] = address.map { value in
-        return _stackSymbol(from: UInt(value), index: 0).info
+    var symbols : [String] = []
+    
+    for (index, address) in stack.enumerated() {
+        let symbol : String
+        if (IsAppSymbolTable) {
+            symbol = _symbolic(address, index: index, aslr: aslr).info
+        }
+        else {
+            symbol = _stackSymbol(address, index: index).info
+        }
+        
+        symbols.append(symbol)
     }
     
     return symbols
 }
-
-//MARK: 线程相关 私有
-@_silgen_name("mach_backtrace")
-public func backtrace(_ thread: thread_t,
-                      stack: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
-                      maxSymbols: Int32) -> Int32
 
 /// 获取 指定mach线程 回调栈
 private func _mach_callstack(_ thread: thread_t) -> [StackSymbol] {
+    // 获取线程堆栈
     var symbols : [StackSymbol] = []
     let stackSize : UInt32 = 128
     let addrs = UnsafeMutablePointer<UnsafeMutableRawPointer?>.allocate(capacity: Int(stackSize))
     defer { addrs.deallocate() }
     let frameCount = backtrace(thread, stack: addrs, maxSymbols: Int32(stackSize))
-    
     let buf = UnsafeBufferPointer(start: addrs, count: Int(frameCount))
 
+    // 解析堆栈地址
     for (index, addr) in buf.enumerated() {
         guard let addr = addr else { continue }
-        let addrValue = UInt(bitPattern: addr)
-        let symbol = _stackSymbol(from: addrValue, index: index)
-        symbols.append(symbol)
-    }
-    return symbols
-}
-
-private func dl_mach_callstack(_ thread: thread_t) -> [StackSymbol] {
-    var symbols : [StackSymbol] = []
-    let stackSize : UInt32 = 128
-    let addrs = UnsafeMutablePointer<UnsafeMutableRawPointer?>.allocate(capacity: Int(stackSize))
-    defer { addrs.deallocate() }
-    let frameCount = backtrace(thread, stack: addrs, maxSymbols: Int32(stackSize))
-    
-    let buf = UnsafeBufferPointer(start: addrs, count: Int(frameCount))
-
-    for (index, addr) in buf.enumerated() {
-        guard let addr = addr else { continue }
-        let addrValue = UInt(bitPattern: addr)
-        let symbol = _stackSymbol(from: addrValue, index: index)
+        let address = UInt(bitPattern: addr)
+        let symbol : StackSymbol
+        
+        // 根据是否有动态符号表来觉得解析方法
+        if (IsAppSymbolTable) {
+            symbol = _symbolic(address, index: index)
+        }
+        else {
+            symbol = _stackSymbol(address, index: index)
+        }
+        
         symbols.append(symbol)
     }
     return symbols
@@ -134,24 +122,4 @@ private func _machAllThread() -> (thread_act_array_t, mach_msg_type_number_t)? {
     }
     
     return (threads!, count)
-}
-
-//MARK: extension
-extension Character {
-    var isAscii: Bool {
-        return unicodeScalars.allSatisfy { $0.isASCII }
-    }
-    var ascii: UInt32? {
-        return isAscii ? unicodeScalars.first?.value : nil
-    }
-}
-
-extension String {
-    var ascii : [Int8] {
-        var unicodeValues = [Int8]()
-        for code in unicodeScalars {
-            unicodeValues.append(Int8(code.value))
-        }
-        return unicodeValues
-    }
 }

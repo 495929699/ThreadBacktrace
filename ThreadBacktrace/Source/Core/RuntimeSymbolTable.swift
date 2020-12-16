@@ -9,24 +9,30 @@ import Foundation
 import ObjectiveC
 import MachO
 
-
-/// APP 动态符号表
-public private(set) var _AppSymbolTable : [SymbolEntry] = []
-/// ASLR
-public private(set) var _AppASLR : Int = 0
-/// APP 镜像 Index
-public private(set) var _AppImageIndex : UInt32 = 0
-
-/// APP 自定义版本号 默认值为 CFBundleShortVersionString
-private var _CustomAppVersion : String = {
-    return Bundle.main.infoDictionary?[Key.AppVersion] as? String ?? ""
-}()
-
 /// Key 枚举
 private enum Key {
     static let AppVersion : String = "CFBundleShortVersionString"
     static let CustomVersion : String = "CustomVersion"
     static let SymbolTablePath : String = ""
+}
+
+/// APP Runtiem 动态符号表（已减去 ASLR）
+public private(set) var _appSymbolTable : [SymbolEntry] = []
+/// ASLR
+public private(set) var _appASLR : Int = 0
+/// APP 镜像 Index
+public private(set) var _appImageIndex : UInt32 = 0
+/// APP 镜像 Name
+public private(set) var _appImageName : String = ""
+
+/// APP 自定义版本号 默认值为 CFBundleShortVersionString
+private var _customAppVersion : String = {
+    return Bundle.main.infoDictionary?[Key.AppVersion] as? String ?? ""
+}()
+
+/// 是否存在 runtime 获取的APP符号表
+var IsAppSymbolTable : Bool {
+    return !_appSymbolTable.isEmpty
 }
 
 //MARK: 符号表获取
@@ -40,36 +46,37 @@ public func InitializeSymbolTable() {
     // 子线程获取符号表
     Thread.detachNewThread {
         
-        _AppASLR = ASLR
-        _AppImageIndex = AppImageIndex
+        _appASLR = ASLR
+        _appImageIndex = AppImageIndex
+        _appImageName = AppImageName
         
         let localVersion = UserDefaults.standard.string(forKey: Key.CustomVersion) ?? ""
         let hasSymbolTable = FileManager.default
-            .fileExists(atPath: _SymbolTableURL?.absoluteString ?? "")
+            .fileExists(atPath: SymbolTableURL?.absoluteString ?? "")
         
         // 版本号发生变化时才重新生成符号表
-        if localVersion != _CustomAppVersion || !hasSymbolTable {
+        if localVersion != _customAppVersion || !hasSymbolTable {
             // 创建符号表
-            _AppSymbolTable = AppSymbolTable()
+            _appSymbolTable = RuntiemSymbolTable()
             // 保存符号表
-            SaveSymbolTable(_AppSymbolTable)
+            SaveSymbolTable(_appSymbolTable)
             
-            UserDefaults.standard.setValue(_CustomAppVersion, forKey: Key.CustomVersion)
+            UserDefaults.standard.setValue(_customAppVersion, forKey: Key.CustomVersion)
             UserDefaults.standard.synchronize()
         }
         else {
             // 从本地读取
-            _AppSymbolTable = GetSymbolTable()
+            _appSymbolTable = ReadSymbolTable()
         }
         
-        print("-------> 符号表初始化完成 symbol count: \(_AppSymbolTable.count)")
+        print("-------> 符号表初始化完成 symbol count: \(_appSymbolTable.count)")
     }
 }
 
-/// 动态获取 APP Mach-O 符号表
-private func AppSymbolTable() -> [SymbolEntry] {
+/// runtime 动态获取 APP 符号表
+private func RuntiemSymbolTable() -> [SymbolEntry] {
     guard
-        let imageName = _dyld_get_image_name(_AppImageIndex)
+        let imageName = _dyld_get_image_name(_appImageIndex)
     else {
         return []
     }
@@ -81,7 +88,7 @@ private func AppSymbolTable() -> [SymbolEntry] {
     }
     
     // 当前运行 aslr
-    let aslr = _AppASLR
+    let aslr = _appASLR
     
     // 符号表
     var symbloTable : [SymbolEntry] = [];
@@ -131,7 +138,7 @@ private func SaveSymbolTable(_ symbols: [SymbolEntry]) {
     guard
         !symbols.isEmpty,
         let data = try? JSONEncoder().encode(symbols),
-        let symbolsURL = _SymbolTableURL
+        let symbolsURL = SymbolTableURL
     else {
         return
     }
@@ -152,9 +159,9 @@ private func SaveSymbolTable(_ symbols: [SymbolEntry]) {
 }
 
 /// 获取符号表
-private func GetSymbolTable() -> [SymbolEntry] {
+private func ReadSymbolTable() -> [SymbolEntry] {
     guard
-        let symbolsURL = _SymbolTableURL,
+        let symbolsURL = SymbolTableURL,
         FileManager.default.fileExists(atPath: symbolsURL.absoluteString),
         let symbolsData = FileManager.default.contents(atPath: symbolsURL.absoluteString),
         let symbolTable = try? JSONDecoder().decode([SymbolEntry].self, from: symbolsData)
@@ -182,13 +189,20 @@ private var AppImageIndex : UInt32 {
     return image_idx
 }
 
+private var AppImageName : String {
+    guard let image_name = _dyld_get_image_name(AppImageIndex) else {
+        return ""
+    }
+    return String(cString: image_name)
+}
+
 /// 获取运行的 ASLR
 private var ASLR : Int {
     return _dyld_get_image_vmaddr_slide(AppImageIndex)
 }
 
 /// 符号表FileURL
-private var _SymbolTableURL: URL? {
+private var SymbolTableURL: URL? {
     guard
         let documentPath = NSSearchPathForDirectoriesInDomains(
             .documentDirectory,

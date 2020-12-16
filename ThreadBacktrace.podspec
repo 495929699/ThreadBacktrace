@@ -8,21 +8,28 @@
 
 Pod::Spec.new do |s|
   s.name             = 'ThreadBacktrace'
-  s.version          = '0.1.4'
-  s.summary          = '获取线程调用栈'
+  s.version          = '0.2.0'
+  s.summary          = '获取线程调用栈 & 解析堆栈'
 
   s.description      = <<-DESC
-TODO: Add long description of the pod here.
+  获取线程调用堆栈 & 解析符号
+  Mach-O 存在符号表则 读取符号表并解析
+  Mach-O 不存在符号表则 利用 runtime 获取当前镜像中所有 Class 的方法。自制符号表并解析
                        DESC
 
   s.homepage         = 'https://github.com/Boy-Rong/ThreadBacktrace'
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
-  s.author           = { 'rongheng' => 'rongheng.rh@gmail.com' }
+  s.author           = { '公子荣' => 'rongheng.rh@gmail.com' }
   s.source           = { :git => 'https://github.com/Boy-Rong/ThreadBacktrace.git', :tag => s.version.to_s }
 
   s.ios.deployment_target = '8.0'
-  s.swift_version = '5.0'
-
-  s.source_files = 'ThreadBacktrace/Classes/*.{h,c,swift}'
   
+  s.swift_versions = ['5.1', '5.2', '5.3']
+  
+  s.source_files = 'ThreadBacktrace/Source/**/*.{swift,h,c}'
+  
+  s.pod_target_xcconfig = {
+    "DEFINES_MODULE" => "YES"
+  }
+
 end
