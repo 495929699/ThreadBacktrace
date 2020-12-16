@@ -9,11 +9,11 @@
 
 获取主线程调用栈
 ```swift
-    BacktraceOfMainThread()
+BacktraceOfMainThread()
 ```
 获取当前线程调用栈
 ```swift
-    BacktraceOfMainThread()
+BacktraceOfMainThread()
 ```
 
 解析堆栈符号，需真实的 ASLR
